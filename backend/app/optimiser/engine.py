@@ -5,17 +5,18 @@ from .data import EXERCISES, Exercise
 from ..models.schemas import (
     GeneratePlanRequest,
     GeneratePlanResponse,
+    TrainingGoal,
     Weekday,
     ExercisePlan,
     IntensityLevel,
     WeightRangeKg,
+    MuscleGroup,
 )
 
 class InfeasiblePlanError(Exception):
     pass
 
 
-# Used to keep weekday ordering consistent (Mon → Sun)
 WEEKDAY_ORDER: Dict[Weekday, int] = {
     Weekday.MONDAY: 0,
     Weekday.TUESDAY: 1,
@@ -26,10 +27,12 @@ WEEKDAY_ORDER: Dict[Weekday, int] = {
     Weekday.SUNDAY: 6,
 }
 
-# Fixed training parameters for the basic engine
+# default params todo get from req 
 DEFAULT_INTENSITY = IntensityLevel.MEDIUM
 DEFAULT_REP_RANGE = "6-10"
 DEFAULT_1RM_PERCENT_RANGE: Tuple[float, float] = (0.65, 0.80)
+
+CARDIO_GROUP = MuscleGroup.CARDIO
 
 
 class TrainingPlanOptimiser:
@@ -38,25 +41,24 @@ class TrainingPlanOptimiser:
         self.model = cp_model.CpModel()
         self.solver = cp_model.CpSolver()
 
-        # Filter exercises by available equipment
+        
         self.available_exercises: List[Exercise] = [
             ex for ex in EXERCISES if ex.equipment in self.request.equipment
         ]
 
-        # Only consider days the user can train on
+        
         self.days: List[Weekday] = sorted(
             self.request.available_days, key=lambda d: WEEKDAY_ORDER[d]
         )
 
     def solve(self) -> GeneratePlanResponse:
-        # Decision variables:
-        # x[(day, i)] = 1 if exercise i is scheduled on that day
+        
         x: Dict[Tuple[Weekday, int], cp_model.IntVar] = {}
         for day in self.days:
             for i in range(len(self.available_exercises)):
                 x[(day, i)] = self.model.NewBoolVar(f"x_{day}_{i}")
 
-        # Constraint: total session time per day must not exceed user limit
+        # constraint cant exceed session time 
         for day in self.days:
             self.model.Add(
                 sum(
@@ -66,22 +68,79 @@ class TrainingPlanOptimiser:
                 <= self.request.session_duration_minutes
             )
 
-        # Constraint: every available day must have at least one exercise
+        # constraint each day has at least one exercise
         for day in self.days:
             self.model.Add(
                 sum(x[(day, i)] for i in range(len(self.available_exercises))) >= 1
             )
 
-        # Objective: maximise total number of exercises selected
+        # constraint: limit how many exercises hit the same muscle on one day
+        # prevents the solver spamming one muscle group to maximise the objective
+        per_muscle_cap = 2
+        for day in self.days:
+            for mg in MuscleGroup:
+                if mg == CARDIO_GROUP:
+                    continue
+                idxs = [i for i, ex in enumerate(self.available_exercises) if ex.muscle_group == mg]
+                if idxs:
+                    self.model.Add(sum(x[(day, i)] for i in idxs) <= per_muscle_cap)
+
+        # constraint: avoid training the same muscle on back-to-back days
+        # introduces basic recovery without fatigue modelling
+        muscle_used: Dict[Tuple[Weekday, MuscleGroup], cp_model.IntVar] = {}
+        for day in self.days:
+            for mg in MuscleGroup:
+                if mg == CARDIO_GROUP:
+                    continue
+                idxs = [i for i, ex in enumerate(self.available_exercises) if ex.muscle_group == mg]
+                if not idxs:
+                    continue
+                y = self.model.NewBoolVar(f"muscle_{day}_{mg}")
+                muscle_used[(day, mg)] = y
+                # y == 0 -> sum == 0
+                self.model.Add(sum(x[(day, i)] for i in idxs) == 0).OnlyEnforceIf(y.Not())
+                # y == 1 -> sum >= 1
+                self.model.Add(sum(x[(day, i)] for i in idxs) >= 1).OnlyEnforceIf(y)
+
+        day_set = set(self.days)
+        for day in self.days:
+            next_order = WEEKDAY_ORDER[day] + 1
+            next_day = next((d for d, o in WEEKDAY_ORDER.items() if o == next_order), None)
+            if next_day is None or next_day not in day_set:
+                continue
+            for mg in MuscleGroup:
+                if mg == CARDIO_GROUP:
+                    continue
+                y1 = muscle_used.get((day, mg))
+                y2 = muscle_used.get((next_day, mg))
+                if y1 is not None and y2 is not None:
+                    self.model.Add(y1 + y2 <= 1)
+
+        # objective: bias exercise selection based on training goal
+        # keeps this as a soft preference (not a hard requirement)
+        def _exercise_weight(ex: Exercise) -> int:
+            if self.request.training_goal == TrainingGoal.STRENGTH:
+                return 3 if ex.is_compound else 1
+            if self.request.training_goal == TrainingGoal.FAT_LOSS:
+                return 3 if ex.muscle_group == CARDIO_GROUP else 1
+            if self.request.training_goal == TrainingGoal.HYPERTROPHY:
+                # slight bias toward more total volume (shorter/non-compound accessories often allow more total work)
+                return 2 if not ex.is_compound else 1
+            return 1
+
         self.model.Maximize(
-            sum(x[(day, i)] for day in self.days for i in range(len(self.available_exercises)))
+            sum(
+                x[(day, i)] * _exercise_weight(self.available_exercises[i])
+                for day in self.days
+                for i in range(len(self.available_exercises))
+            )
         )
 
         status = self.solver.Solve(self.model)
         if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             raise InfeasiblePlanError("Unable to generate a feasible training plan.")
 
-        # Convert solver output into API response format
+        # solver -> week_plan
         week_plan: Dict[Weekday, List[ExercisePlan]] = {}
         for day in self.days:
             exercises_for_day: List[ExercisePlan] = []
@@ -98,10 +157,10 @@ class TrainingPlanOptimiser:
         )
 
     def _format_exercise(self, ex: Exercise) -> ExercisePlan:
-        # All exercises use the same neutral intensity in this version
+        # default intensity is medium todo add fatigue level logic
         intensity = DEFAULT_INTENSITY
 
-        # Compute weight range if the exercise is linked to a 1RM
+        # get a weight range based on the 1RM todo get 1rm from req 
         weight_range = None
         if ex.primary_1rm_link:
             one_rm_value = getattr(self.request.one_rep_maxes, ex.primary_1rm_link)

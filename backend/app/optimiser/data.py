@@ -10,7 +10,7 @@ class Exercise:
         is_compound: bool,
         duration_minutes: int,
         primary_1rm_link: Optional[str] = None, # squat_1rm, bench_1rm, deadlift_1rm
-        weight_multiplier: float = 1.0 # multiplier of the linked 1RM
+        weight_multiplier: float = 1.0 
     ):
         self.name = name
         self.muscle_group = muscle_group
@@ -52,7 +52,7 @@ EXERCISES = [
     Exercise("Plank", MuscleGroup.CORE, Equipment.BODYWEIGHT, False, 10),
     
     # Cardio
-    # Bodyweight cardio (e.g. outdoor run/walk) still counts as cardio modality,
+    # cardio exercises are gonna be treated differently to others later i wont add things like fatigue 
     # but does NOT require cardio equipment.
     Exercise("Outdoor Run", MuscleGroup.CARDIO, Equipment.BODYWEIGHT, False, 20),
     Exercise("Brisk Walk", MuscleGroup.CARDIO, Equipment.BODYWEIGHT, False, 20),
