@@ -22,7 +22,7 @@ class Exercise:
 
 EXERCISES = [
     # Legs
-    Exercise("Barbell Back Squat", MuscleGroup.LEGS, Equipment.BARBELL, True, 25, "squat_1rm", 1.0),
+    Exercise("Barbell Back Squat", MuscleGroup.LEGS, Equipment.BARBELL, True, 20, "squat_1rm", 1.0),
     Exercise("Dumbbell Lunges", MuscleGroup.LEGS, Equipment.DUMBBELL, False, 15, "squat_1rm", 0.4),
     Exercise("Leg Press", MuscleGroup.LEGS, Equipment.MACHINE, False, 15, "squat_1rm", 0.8),
     Exercise("Leg Extension", MuscleGroup.LEGS, Equipment.MACHINE, False, 10, "squat_1rm", 0.3),
@@ -35,7 +35,7 @@ EXERCISES = [
     Exercise("Pushups", MuscleGroup.CHEST, Equipment.BODYWEIGHT, False, 10),
     
     # Back
-    Exercise("Barbell Deadlift", MuscleGroup.BACK, Equipment.BARBELL, True, 25, "deadlift_1rm", 1.0),
+    Exercise("Barbell Deadlift", MuscleGroup.BACK, Equipment.BARBELL, True, 20, "deadlift_1rm", 1.0),
     Exercise("Barbell Row", MuscleGroup.BACK, Equipment.BARBELL, True, 20, "deadlift_1rm", 0.6),
     Exercise("Lat Pulldown", MuscleGroup.BACK, Equipment.MACHINE, False, 15, "deadlift_1rm", 0.5),
     Exercise("Pullups", MuscleGroup.BACK, Equipment.BODYWEIGHT, False, 15),
