@@ -2,11 +2,19 @@ from pydantic import BaseModel, Field
 from typing import List, Dict, Set, Optional
 from enum import Enum
 
+
 class TrainingGoal(str, Enum):
     HYPERTROPHY = "hypertrophy"
     STRENGTH = "strength"
     FAT_LOSS = "fat_loss"
     GENERAL_FITNESS = "general_fitness"
+
+
+class PrimaryLiftKey(str, Enum):
+    SQUAT = "squat_1rm"
+    BENCH = "bench_1rm"
+    DEADLIFT = "deadlift_1rm"
+    OHP = "ohp_1rm"
 
 class Weekday(str, Enum):
     MONDAY = "monday"
@@ -33,21 +41,23 @@ class MuscleGroup(str, Enum):
     CORE = "core"
     CARDIO = "cardio"
 
-class IntensityLevel(str, Enum):
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
 
-class FatigueLevel(str, Enum):
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    MAX = "max"
+
+
+class SplitType(str, Enum):
+    FULL_BODY = "full_body"
+    UPPER = "upper"
+    LOWER = "lower"
+    PUSH = "push"
+    PULL = "pull"
+    LEGS = "legs"
+
 
 class OneRepMaxes(BaseModel):
     squat_1rm: float = Field(..., gt=0)
     bench_1rm: float = Field(..., gt=0)
     deadlift_1rm: float = Field(..., gt=0)
+    ohp_1rm: float = Field(..., gt=0)
 
 class WeightRangeKg(BaseModel):
     min: float
@@ -59,19 +69,22 @@ class GeneratePlanRequest(BaseModel):
     session_duration_minutes: int = Field(..., ge=30, le=90)
     equipment: Set[Equipment]
     one_rep_maxes: OneRepMaxes
-    fatigue_levels: Dict[MuscleGroup, FatigueLevel]
+    required_primary_lifts: Set[PrimaryLiftKey] = Field(default_factory=set)
+    excluded_exercises: Set[str] = Field(default_factory=set)
+    include_cardio: bool = False
 
 class ExercisePlan(BaseModel):
     name: str
     muscle_group: MuscleGroup
     equipment: Equipment
-    intensity_level: IntensityLevel
     rep_range: str
+    sets: int = Field(..., ge=1)
+    work_minutes: int = Field(..., ge=0)
+    rest_minutes: int = Field(..., ge=0)
     weight_range_kg: Optional[WeightRangeKg] = None
+    weight_display: Optional[str] = None
 
 class GeneratePlanResponse(BaseModel):
     training_goal: TrainingGoal
-    deload_week: bool
+    inferred_split: Dict[Weekday, SplitType]
     week_plan: Dict[Weekday, List[ExercisePlan]]
-    fatigue_summary: Dict[MuscleGroup, FatigueLevel]
-
