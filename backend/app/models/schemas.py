@@ -63,6 +63,21 @@ class WeightRangeKg(BaseModel):
     min: float
     max: float
 
+class OnboardingRequest(BaseModel):
+    training_goal: str
+    available_days: List[str]
+    session_duration_min: int
+    equipment: List[str]
+    include_cardio: bool = False
+    squat_1rm: float=Field(..., gt=0)
+    bench_1rm: float=Field(..., gt=0)
+    deadlift_1rm: float=Field(..., gt=0)
+    ohp_1rm: float=Field(..., gt=0)
+    required_primary_lifts: Optional[List[str]] = None
+    excluded_exercises: Optional[List[str]] = None
+    first_name: str
+
+
 class GeneratePlanRequest(BaseModel):
     training_goal: TrainingGoal
     available_days: Set[Weekday]
