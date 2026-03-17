@@ -1,9 +1,9 @@
-import httpx
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..api.profile import get_profile
 from ..core.auth import get_current_user_id
 from ..core.config import SERVICE_HEADERS, SUPABASE_URL
+from ..core.http import get_http_client
 from ..models.schemas import GeneratePlanRequest
 from ..optimiser.engine import TrainingPlanOptimiser, InfeasiblePlanError
 
@@ -18,25 +18,25 @@ GOAL_MAP = {
 
 
 async def _insert_plan(user_id: str, request_json: dict) -> dict:
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            f"{SUPABASE_URL}/rest/v1/plans",
-            headers=SERVICE_HEADERS,
-            json={"user_id": user_id, "status": "running", "request_json": request_json},
-        )
+    client = get_http_client()
+    resp = await client.post(
+        f"{SUPABASE_URL}/rest/v1/plans",
+        headers=SERVICE_HEADERS,
+        json={"user_id": user_id, "status": "running", "request_json": request_json},
+    )
     if resp.status_code not in (200, 201):
         raise HTTPException(status_code=502, detail=f"Failed to create plan row: {resp.text}")
     return resp.json()[0]
 
 
 async def _update_plan(plan_id: str, data: dict) -> None:
-    async with httpx.AsyncClient() as client:
-        await client.patch(
-            f"{SUPABASE_URL}/rest/v1/plans",
-            params={"id": f"eq.{plan_id}"},
-            headers=SERVICE_HEADERS,
-            json=data,
-        )
+    client = get_http_client()
+    await client.patch(
+        f"{SUPABASE_URL}/rest/v1/plans",
+        params={"id": f"eq.{plan_id}"},
+        headers=SERVICE_HEADERS,
+        json=data,
+    )
 
 
 def _build_optimiser_input(profile: dict) -> dict:
@@ -77,17 +77,17 @@ def _build_optimiser_input(profile: dict) -> dict:
 @router.get("/latest")
 async def get_latest_plan(user_id: str = Depends(get_current_user_id)):
     select = "id,status,request_json,response_json,error_message,created_at"
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            f"{SUPABASE_URL}/rest/v1/plans",
-            params={
-                "user_id": f"eq.{user_id}",
-                "select": select,
-                "order": "created_at.desc",
-                "limit": "1",
-            },
-            headers=SERVICE_HEADERS,
-        )
+    client = get_http_client()
+    resp = await client.get(
+        f"{SUPABASE_URL}/rest/v1/plans",
+        params={
+            "user_id": f"eq.{user_id}",
+            "select": select,
+            "order": "created_at.desc",
+            "limit": "1",
+        },
+        headers=SERVICE_HEADERS,
+    )
     if resp.status_code != 200:
         raise HTTPException(status_code=502, detail=f"Failed to fetch plans: {resp.text}")
     rows = resp.json()

@@ -1,12 +1,31 @@
-import httpx
-from fastapi import APIRouter, Depends, HTTPException
+import re
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..core.auth import get_current_user_id
 from ..core.config import SERVICE_HEADERS, SUPABASE_URL
-from ..models.schemas import OnboardingRequest
+from ..core.http import get_http_client
+from ..models.schemas import OnboardingRequest, setUsernameRequest
 from ..optimiser.data import EXERCISES
 
+USERNAME_REGEX = re.compile(r"^[a-z0-9_]{3,20}$")
+
 router = APIRouter(prefix="/api/profile")
+
+
+def _validate_username(raw: str) -> str:
+    u = raw.strip().lower()
+    if not USERNAME_REGEX.match(u):
+        raise HTTPException(
+            status_code=400,
+            detail="Use 3-20 letters, numbers, _ and include at least one digit",
+        )
+    if not re.search(r"[0-9]", u):
+        raise HTTPException(
+            status_code=400,
+            detail="Use 3-20 letters, numbers, _ and include at least one digit",
+        )
+    return u
 
 PRIMARY_LIFT_LABELS = {
     "squat_1rm": "Squat",
@@ -20,20 +39,63 @@ PRIMARY_LIFT_LABELS = {
 async def get_profile(
     user_id: str = Depends(get_current_user_id),
 ):
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            f"{SUPABASE_URL}/rest/v1/profiles",
-            params={"id": f"eq.{user_id}", "select": "*"},
-            headers={
-                **SERVICE_HEADERS,
-                "Accept": "application/json",
-            },
-        )
+    client = get_http_client()
+    resp = await client.get(
+        f"{SUPABASE_URL}/rest/v1/profiles",
+        params={"id": f"eq.{user_id}", "select": "*"},
+        headers={
+            **SERVICE_HEADERS,
+            "Accept": "application/json",
+        },
+    )
     if resp.status_code != 200:
         raise HTTPException(status_code=502, detail=f"Profile fetch failed: {resp.text}")
     rows = resp.json()
     if not rows:
         raise HTTPException(status_code=404, detail="Profile not found")
+    return rows[0]
+
+
+@router.get("/username-available")
+async def get_username_available(username: str = Query(..., min_length=1)):
+    u = _validate_username(username)
+    client = get_http_client()
+    resp = await client.get(
+        f"{SUPABASE_URL}/rest/v1/profiles",
+        params={"username": f"eq.{u}", "select": "id"},
+        headers=SERVICE_HEADERS,
+    )
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail="Username check failed")
+    rows = resp.json()
+    if rows:
+        raise HTTPException(status_code=409, detail="That username is already taken")
+    return {"available": True}
+
+
+@router.patch("")
+async def set_username(
+    body: setUsernameRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    u = _validate_username(body.username)
+    client = get_http_client()
+    resp = await client.patch(
+        f"{SUPABASE_URL}/rest/v1/profiles",
+        params={"id": f"eq.{user_id}"},
+        headers=SERVICE_HEADERS,
+        json={"username": u},
+    )
+    if resp.status_code == 409:
+        raise HTTPException(status_code=409, detail="That username is already taken")
+    if resp.status_code not in (200, 201):
+        raise HTTPException(status_code=502, detail=f"Profile update failed: {resp.text}")
+    rows = resp.json()
+    if not rows:
+        raise HTTPException(
+            status_code=500,
+            detail="Profile row not found for user; check auth->profiles trigger.",
+        )
     return rows[0]
 
 
@@ -108,16 +170,13 @@ async def update_onboarding(
         "onboarding_completed": True,
     }
 
-    if body.first_name is not None:
-        update_data["first_name"] = body.first_name
-
-    async with httpx.AsyncClient() as client:
-        resp = await client.patch(
-            f"{SUPABASE_URL}/rest/v1/profiles",
-            params={"id": f"eq.{user_id}"},
-            headers=SERVICE_HEADERS,
-            json=update_data,
-        )
+    client = get_http_client()
+    resp = await client.patch(
+        f"{SUPABASE_URL}/rest/v1/profiles",
+        params={"id": f"eq.{user_id}"},
+        headers=SERVICE_HEADERS,
+        json=update_data,
+    )
 
     if resp.status_code not in (200, 201):
         raise HTTPException(status_code=502, detail=f"Profile update failed: {resp.text}")

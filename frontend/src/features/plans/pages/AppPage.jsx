@@ -1,47 +1,27 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { backendRequest } from "../../../api/backendClient";
 import DayCard from "../components/DayCard";
-
-const DAY_ORDER = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+import PlanHeader from "../components/PlanHeader";
+import PlanMetaCard from "../components/PlanMetaCard";
+import RestDayCard from "../components/RestDayCard";
+import { useLatestPlan } from "../context/PlanContext";
+import { buildRenderDays } from "../utils/weekRendering";
 
 export default function AppPage() {
   const navigate = useNavigate();
-  const { signOut } = useAuth();
+  const { profile, signOut } = useAuth();
+  const { plan, loading, noPlan, error, setError, refreshLatestPlan } = useLatestPlan();
 
-  const [plan, setPlan] = useState(null);
-  const [noPlan, setNoPlan] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    async function fetchLatest() {
-      try {
-        const data = await backendRequest("/api/plans/latest");
-        setPlan(data);
-        setNoPlan(false);
-      } catch (err) {
-        if (err.status === 404) {
-          setNoPlan(true);
-        } else {
-          setError(err.message);
-        }
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchLatest();
-  }, []);
 
   async function handleGenerate() {
     setError("");
     setGenerating(true);
     try {
-      const data = await backendRequest("/api/plans/generate", { method: "POST" });
-      setPlan(data);
-      setNoPlan(false);
+      await backendRequest("/api/plans/generate", { method: "POST" });
+      await refreshLatestPlan();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -55,22 +35,20 @@ export default function AppPage() {
   }
 
   const weekPlan = plan?.response_json?.week_plan;
-  const split = plan?.response_json?.inferred_split;
-  const sortedDays = weekPlan
-    ? DAY_ORDER.filter((d) => weekPlan[d])
+  const inferredSplit = plan?.response_json?.inferred_split;
+  const renderDays = buildRenderDays(weekPlan);
+  const allWorkoutDays = weekPlan
+    ? Object.keys(weekPlan).filter(d => Array.isArray(weekPlan[d]) && weekPlan[d].length > 0)
     : [];
 
   return (
     <div className="min-h-screen bg-linear-to-br from-canvas-deep via-canvas to-canvas-light relative overflow-hidden">
-      <header className="flex items-center justify-between px-8 py-5">
-        <span className="text-sm font-bold text-white tracking-tight">CoachLens</span>
-        <button
-          onClick={handleSignOut}
-          className="text-xs text-slate-400 hover:text-white border border-white/10 hover:border-white/30 rounded-lg px-3 py-1.5 transition-all duration-200"
-        >
-          Sign out
-        </button>
-      </header>
+      <PlanHeader
+        username={profile?.username}
+        createdAt={plan?.created_at}
+        onSignOut={handleSignOut}
+        onKebabAction={(action) => setError(`${action} is coming next.`)}
+      />
 
       <main className="max-w-5xl mx-auto px-6 pb-16">
         <div className="flex items-center justify-between mb-8">
@@ -110,16 +88,25 @@ export default function AppPage() {
         )}
 
         {plan?.status === "success" && weekPlan && (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {sortedDays.map((day) => (
-              <DayCard
-                key={day}
-                day={day}
-                split={split?.[day]}
-                exercises={weekPlan[day]}
-              />
-            ))}
-          </div>
+          <>
+            <PlanMetaCard requestJson={plan?.request_json} responseJson={plan?.response_json} />
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {renderDays.map((item) =>
+                item.type === "workout" ? (
+                  <DayCard
+                    key={item.day}
+                    day={item.day}
+                    split={inferredSplit?.[item.day]}
+                    exercises={item.exercises}
+                    createdAt={plan?.created_at}
+                    allWorkoutDays={allWorkoutDays}
+                  />
+                ) : (
+                  <RestDayCard key={item.day} day={item.day} />
+                )
+              )}
+            </div>
+          </>
         )}
       </main>
     </div>
