@@ -20,13 +20,19 @@ export const SPLIT_COLORS = {
 function exerciseDuration(ex) {
   return ex.sets* ex.work_minutes + ex.rest_minutes*(ex.sets-1);
 }
-fc
+
 function dayDuration(exercises) {
   return exercises.reduce((sum, ex) => sum + exerciseDuration(ex), 0);
 }
 
-export default function DayCard({ day, split, exercises }) {
+import { useNavigate } from "react-router-dom";
+import { resolvedDateForDay, todayStr, formatShortDate } from "../utils/trackingDates";
+
+export default function DayCard({ day, split, exercises, createdAt, allWorkoutDays }) {
+  const navigate = useNavigate();
   const durationMinutes = dayDuration(exercises ?? []);
+  const resolvedDate = resolvedDateForDay(day, allWorkoutDays, createdAt?.slice(0, 10));
+  const isFuture = resolvedDate > todayStr();
   return (
     <div className="backdrop-blur-lg bg-white/4 border border-white/8 rounded-2xl p-5">
       <div className="flex items-baseline justify-between mb-4">
@@ -77,6 +83,20 @@ export default function DayCard({ day, split, exercises }) {
             </div>
           );
         })}
+      </div>
+      <div className="mt-4 pt-4 border-t border-white/8">
+        {isFuture ? (
+          <span className="text-xs text-slate-500">
+            You can log this on {DAY_LABEL[day]} {formatShortDate(resolvedDate)}
+          </span>
+        ) : (
+          <button
+            onClick={() => navigate(`/app/track?date=${resolvedDate}`)}
+            className="text-xs text-slate-400 hover:text-white border border-white/10 hover:border-white/30 rounded-lg px-3 py-1.5 transition-all duration-200"
+          >
+            Log workout
+          </button>
+        )}
       </div>
     </div>
   );

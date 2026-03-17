@@ -29,7 +29,7 @@ function StepIndicator({ current, total }) {
 
 export default function Onboarding() {
   const navigate = useNavigate();
-  const { user, refreshProfile } = useAuth();
+  const { refreshProfile } = useAuth();
 
   const [step, setStep] = useState(1);
   const [selectedDays, setSelectedDays] = useState([]);
@@ -115,7 +115,6 @@ export default function Onboarding() {
     }
 
     const sortedDays = sortDaysLowercase(selectedDays);
-    const firstName = user?.user_metadata?.first_name?.trim();
 
     const payload = {
       training_goal: goalToEnum(goal),
@@ -129,7 +128,6 @@ export default function Onboarding() {
       ohp_1rm: ohp,
       required_primary_lifts: requiredPrimaryLifts,
       excluded_exercises: excludedExercises,
-      first_name: firstName,
     };
 
     setSubmitting(true);

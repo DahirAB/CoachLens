@@ -8,7 +8,24 @@ if (!BASE_URL || BASE_URL.startsWith('<')) {
   )
 }
 
+const _inflight = new Map()
+// method that deduplicates get requests done by ai 
 export async function backendRequest(path, options = {}) {
+  const method = (options.method || 'GET').toUpperCase()
+
+  if (method === 'GET') {
+    if (_inflight.has(path)) return _inflight.get(path)
+    const promise = _rawBackendRequest(path, options).finally(() => {
+      _inflight.delete(path)
+    })
+    _inflight.set(path, promise)
+    return promise
+  }
+
+  return _rawBackendRequest(path, options)
+}
+
+async function _rawBackendRequest(path, options = {}) {
   const { data: { session } } = await supabase.auth.getSession()
   const token = session?.access_token
 

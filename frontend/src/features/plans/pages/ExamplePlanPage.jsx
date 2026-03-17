@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import DayCard from "../components/DayCard";
-
-const DAY_ORDER = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+import RestDayCard from "../components/RestDayCard";
+import { buildRenderDays } from "../utils/weekRendering";
 
 const EXAMPLE_REQUEST = {
   equipment: ["barbell", "dumbbell", "machine"],
@@ -56,9 +56,9 @@ const DAY_LABELS = { monday: "Mon", wednesday: "Wed", friday: "Fri" };
 
 export default function ExamplePlanPage() {
   const weekPlan = EXAMPLE_PLAN_RESPONSE.week_plan;
-  const split = EXAMPLE_PLAN_RESPONSE.inferred_split;
+  const inferredSplit = EXAMPLE_PLAN_RESPONSE.inferred_split;
   const req = EXAMPLE_REQUEST;
-  const sortedDays = DAY_ORDER.filter((d) => weekPlan[d]);
+  const renderDays = buildRenderDays(weekPlan);
 
   return (
     <div className="min-h-screen bg-linear-to-br from-canvas-deep via-canvas to-canvas-light relative overflow-hidden">
@@ -126,14 +126,18 @@ export default function ExamplePlanPage() {
         <section>
           <h2 className="text-base font-semibold text-white mb-4">Weekly plan</h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {sortedDays.map((day) => (
-              <DayCard
-                key={day}
-                day={day}
-                split={split?.[day]}
-                exercises={weekPlan[day]}
-              />
-            ))}
+            {renderDays.map((item) =>
+              item.type === "workout" ? (
+                <DayCard
+                  key={item.day}
+                  day={item.day}
+                  split={inferredSplit?.[item.day]}
+                  exercises={item.exercises}
+                />
+              ) : (
+                <RestDayCard key={item.day} day={item.day} />
+              )
+            )}
           </div>
         </section>
 

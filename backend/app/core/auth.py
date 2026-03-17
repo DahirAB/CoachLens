@@ -1,7 +1,7 @@
-import httpx
 from fastapi import HTTPException, Request
 
 from .config import SUPABASE_URL, SUPABASE_ANON_KEY
+from .http import get_http_client
 
 
 async def get_current_user_id(request: Request) -> str:
@@ -11,14 +11,14 @@ async def get_current_user_id(request: Request) -> str:
 
     token = auth_header.removeprefix("Bearer ")
 
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            f"{SUPABASE_URL}/auth/v1/user",
-            headers={
-                "apikey": SUPABASE_ANON_KEY,
-                "Authorization": f"Bearer {token}",
-            },
-        )
+    client = get_http_client()
+    resp = await client.get(
+        f"{SUPABASE_URL}/auth/v1/user",
+        headers={
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": f"Bearer {token}",
+        },
+    )
 
     if resp.status_code != 200:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
