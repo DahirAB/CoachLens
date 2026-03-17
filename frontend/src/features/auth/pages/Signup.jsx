@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { backendRequest, publicRequest } from "../../../api/backendClient";
 import { useAuth } from "../AuthContext";
 import Input from "../components/Input";
 
 const PASSWORD_MIN_LENGTH = 8;
+const USERNAME_ERROR = "Use 3–20 letters,numbers , _ and have at least one digit";
 
 function validatePassword(pwd) {
   if (pwd.length < PASSWORD_MIN_LENGTH) {
@@ -16,10 +18,19 @@ function validatePassword(pwd) {
   return null;
 }
 
+function validateUsername(username) {
+  const u = username.trim().toLowerCase();
+  if (!u) return "Username is required.";
+  if (u.length < 3 || u.length > 20) return USERNAME_ERROR;
+  if (!/^[a-z0-9_]+$/.test(u)) return USERNAME_ERROR;
+  if (!/[0-9]/.test(u)) return USERNAME_ERROR;
+  return null;
+}
+
 export default function Signup() {
   const navigate = useNavigate();
-  const { signUp } = useAuth();
-  const [firstName, setFirstName] = useState("");
+  const { signUp, refreshProfile } = useAuth();
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -30,8 +41,9 @@ export default function Signup() {
     e.preventDefault();
     setError("");
 
-    const trimmedName = firstName.trim();
-    if (!trimmedName) return setError("First name is required.");
+    const u = username.trim().toLowerCase();
+    const usernameError = validateUsername(username);
+    if (usernameError) return setError(usernameError);
     if (!email.trim()) return setError("Email is required.");
 
     const passwordError = validatePassword(password);
@@ -40,16 +52,42 @@ export default function Signup() {
 
     setSubmitting(true);
     try {
+      // check username to stop orphan profiles
+      try {
+        await publicRequest(`/api/profile/username-available?username=${u}`);
+      } catch (err) {
+        if (err.status === 409) {
+          setError("That username is already taken");
+          return;
+        }
+        if (err.status === 400) {
+          setError(err.message || USERNAME_ERROR);
+          return;
+        }
+        throw err;
+      }
+
       const trimmedEmail = email.trim().toLowerCase();
-      const { error: supaError } = await signUp({ email: trimmedEmail, password, firstName: trimmedName });
+      const { error: supaError } = await signUp({ email: trimmedEmail, password });
       if (supaError) {
         setError(supaError.message);
         return;
       }
 
+      const profile = await backendRequest("/api/profile", {
+        method: "PATCH",
+        body: { username: u },
+      });
+      refreshProfile(profile);
       navigate("/onboarding", { replace: true });
-    } catch {
-      setError("Something went wrong. Please try again.");
+    } catch (err) {
+      if (err.status === 409) {
+        setError("That username is already taken");
+      } else if (err.status === 400) {
+        setError(err.message || USERNAME_ERROR);
+      } else {
+        setError("Something went wrong. Please try again.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -85,15 +123,20 @@ export default function Signup() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-5">
-              <Input
-                id="signup-name"
-                label="First name"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                placeholder="Your first name"
-                autoComplete="given-name"
-                required
-              />
+              <div>
+                <Input
+                  id="signup-username"
+                  label="Username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="johndoe1"
+                  autoComplete="username"
+                  required
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                Use 3–20 letters,numbers , _ and have at least one digit
+                </p>
+              </div>
 
               <Input
                 id="signup-email"

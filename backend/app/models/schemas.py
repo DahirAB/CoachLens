@@ -1,4 +1,6 @@
-from pydantic import BaseModel, Field
+from datetime import date
+
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Dict, Set, Optional
 from enum import Enum
 
@@ -63,6 +65,11 @@ class WeightRangeKg(BaseModel):
     min: float
     max: float
 
+class setUsernameRequest(BaseModel):
+    username: str
+
+
+
 class OnboardingRequest(BaseModel):
     training_goal: str
     available_days: List[str]
@@ -75,7 +82,6 @@ class OnboardingRequest(BaseModel):
     ohp_1rm: float=Field(..., gt=0)
     required_primary_lifts: Optional[List[str]] = None
     excluded_exercises: Optional[List[str]] = None
-    first_name: str
 
 
 class GeneratePlanRequest(BaseModel):
@@ -103,3 +109,22 @@ class GeneratePlanResponse(BaseModel):
     training_goal: TrainingGoal
     inferred_split: Dict[Weekday, SplitType]
     week_plan: Dict[Weekday, List[ExercisePlan]]
+
+
+class TrackingEntry(BaseModel):
+    done: bool
+    sets_done: int = Field(..., ge=0)
+
+
+class DailyTrackingRequest(BaseModel):
+    day: Weekday
+    logged_date: str
+    timezone: Optional[str] = None
+    note_text: Optional[str] = None
+    entries: Dict[str, TrackingEntry]
+
+    @field_validator("logged_date")
+    @classmethod
+    def validate_logged_date(cls, v):
+        date.fromisoformat(v)
+        return v

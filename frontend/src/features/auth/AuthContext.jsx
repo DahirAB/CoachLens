@@ -67,7 +67,7 @@ export function AuthProvider({ children }) {
         }
       })
     return () => { cancelled = true }
-  }, [user, initialised])
+  }, [user?.id, initialised])
 
   async function refreshProfile(updatedProfile = null) {
     if (updatedProfile !== null) {
@@ -90,12 +90,8 @@ export function AuthProvider({ children }) {
     }
   }
 
-  function signUp({ email, password, firstName }) {
-    return supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { first_name: firstName } },
-    })
+  function signUp({ email, password }) {
+    return supabase.auth.signUp({ email, password })
   }
 
   function signIn({ email, password }) {
