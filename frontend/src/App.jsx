@@ -1,11 +1,13 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 import Homepage from "./features/homepage/pages/Homepage";
 import ExamplePlanPage from "./features/plans/pages/ExamplePlanPage";
 import Login from "./features/auth/pages/Login";
 import Signup from "./features/auth/pages/Signup";
 import Onboarding from "./features/onboarding/OnboardingPage";
 import AppPage from "./features/plans/pages/AppPage";
+import TrackingPage from "./features/plans/pages/TrackingPage";
 import ProtectedRoute from "./features/auth/ProtectedRoute";
+import { PlanProvider } from "./features/plans/context/PlanContext";
 
 function App() {
   return (
@@ -15,7 +17,7 @@ function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
       <Route
-        path="/onboardingj"
+        path="/onboarding"
         element={
           <ProtectedRoute redirectIfOnboardingComplete>
             <Onboarding />
@@ -26,10 +28,15 @@ function App() {
         path="/app"
         element={
           <ProtectedRoute requireOnboarding={true}>
-            <AppPage />
+            <PlanProvider>
+              <Outlet />
+            </PlanProvider>
           </ProtectedRoute>
         }
-      />
+      >
+        <Route index element={<AppPage />} />
+        <Route path="track" element={<TrackingPage />} />
+      </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
