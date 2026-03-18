@@ -6,6 +6,7 @@ import Signup from "./features/auth/pages/Signup";
 import Onboarding from "./features/onboarding/OnboardingPage";
 import AppPage from "./features/plans/pages/AppPage";
 import TrackingPage from "./features/plans/pages/TrackingPage";
+import EditConstraintsPage from "./features/constraints/EditConstraintsPage";
 import ProtectedRoute from "./features/auth/ProtectedRoute";
 import { PlanProvider } from "./features/plans/context/PlanContext";
 
@@ -36,6 +37,7 @@ function App() {
       >
         <Route index element={<AppPage />} />
         <Route path="track" element={<TrackingPage />} />
+        <Route path="constraints" element={<EditConstraintsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
