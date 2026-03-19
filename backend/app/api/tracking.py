@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..core.auth import get_current_user_id
 from ..core.config import SERVICE_HEADERS, SUPABASE_URL
+from ..core.crypto import decrypt_json_payload, encrypt_json_payload
 from ..core.http import get_http_client
 from ..models.schemas import DailyTrackingRequest
 
@@ -20,7 +21,13 @@ async def _get_plan_for_user(plan_id: str, user_id: str) -> dict:
     rows = resp.json()
     if not rows:
         raise HTTPException(status_code=404, detail="Plan not found")
-    return rows[0]
+    plan = rows[0]
+    try:
+        plan["request_json"] = decrypt_json_payload(plan.get("request_json"), aad_context=user_id)
+        plan["response_json"] = decrypt_json_payload(plan.get("response_json"), aad_context=user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to decrypt plan data: {e}")
+    return plan
 
 
 def _validate_entries(body: DailyTrackingRequest, plan_response_json: dict) -> dict:
@@ -78,11 +85,16 @@ async def get_daily_tracking(
         headers=SERVICE_HEADERS,
     )
     if resp.status_code != 200:
-        raise HTTPException(status_code=502, detail=f"Failed to fetch tracking: {resp.text}")
+        raise HTTPException(status_code= 502, detail=f"Failed to fetch tracking: {resp.text}")
     rows = resp.json()
     if not rows:
         raise HTTPException(status_code=404, detail="No tracking found for this day ")
-    return rows[0]
+    row = rows[0]
+    try:
+        row["entries_json"] = decrypt_json_payload(row.get("entries_json"), aad_context=user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to decrypt tracking data: {e}")
+    return row
 
 
 @router.put("/{plan_id}/tracking/daily")
@@ -106,6 +118,8 @@ async def put_daily_tracking(
         "entries_json": validated_entries,
         "note_text": body.note_text,
     }
+    write_payload = dict(payload)
+    write_payload["entries_json"] = encrypt_json_payload(validated_entries, aad_context=user_id)
 
     upsert_headers = {**SERVICE_HEADERS, "Prefer": "resolution=merge-duplicates,return=representation"}
 
@@ -114,11 +128,18 @@ async def put_daily_tracking(
         f"{SUPABASE_URL}/rest/v1/plan_tracking_daily",
         params={"on_conflict": "plan_id,user_id,logged_date"},
         headers=upsert_headers,
-        json=payload,
+        json=write_payload,
     )
 
     if resp.status_code not in (200, 201):
         raise HTTPException(status_code=502, detail=f"Failed to upsert tracking: {resp.text}")
 
     rows = resp.json()
-    return rows[0] if rows else payload
+    if rows:
+        row = rows[0]
+        try:
+            row["entries_json"] = decrypt_json_payload(row.get("entries_json"), aad_context=user_id)
+        except ValueError as e:
+            raise HTTPException(status_code=500, detail=f"Failed to decrypt tracking data: {e}")
+        return row
+    return payload
