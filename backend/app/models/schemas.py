@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field, field_validator
 from typing import List, Dict, Set, Optional
@@ -128,3 +128,66 @@ class DailyTrackingRequest(BaseModel):
     def validate_logged_date(cls, v):
         date.fromisoformat(v)
         return v
+
+
+class CreateShareRequest(BaseModel):
+    username: str = Field(..., min_length=1)
+    can_view_tracking: bool = False
+    expires_at: Optional[str] = None
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, value: str):
+        username = value.strip().lower()
+        if not username:
+            raise ValueError("username is required")
+        return username
+
+    @field_validator("expires_at")
+    @classmethod
+    def validate_expires_at(cls, value: Optional[str]):
+        if value is None:
+            return value
+        datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return value
+
+
+class ShareResponse(BaseModel):
+    id: str
+    plan_id: str
+    recipient_username: str
+    can_view_tracking: bool
+    expires_at: Optional[str]
+    created_at: str
+
+
+class SharedPlanSummary(BaseModel):
+    share_id: str
+    plan_id: str
+    owner_username: str
+    can_view_tracking: bool
+    expires_at: Optional[str]
+    shared_at: str
+    plan_created_at: str
+
+
+class SharedPlanDetail(BaseModel):
+    share_id: str
+    plan_id: str
+    owner_username: str
+    can_view_tracking: bool
+    request_json: dict
+    response_json: dict
+    shared_at: str
+    expires_at: Optional[str]
+    plan_created_at: str
+
+
+class OutgoingShare(BaseModel):
+    id: str
+    plan_id: str
+    recipient_username: str
+    can_view_tracking: bool
+    expires_at: Optional[str]
+    revoked_at: Optional[str]
+    created_at: str
