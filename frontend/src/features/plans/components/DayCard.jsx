@@ -28,7 +28,7 @@ function dayDuration(exercises) {
 import { useNavigate } from "react-router-dom";
 import { resolvedDateForDay, todayStr, formatShortDate } from "../utils/trackingDates";
 
-export default function DayCard({ day, split, exercises, createdAt, allWorkoutDays }) {
+export default function DayCard({ day, split, exercises, createdAt, allWorkoutDays, readOnly = false }) {
   const navigate = useNavigate();
   const durationMinutes = dayDuration(exercises ?? []);
   const resolvedDate = resolvedDateForDay(day, allWorkoutDays, createdAt?.slice(0, 10));
@@ -64,16 +64,18 @@ export default function DayCard({ day, split, exercises, createdAt, allWorkoutDa
               <span className="text-[10px] font-medium uppercase tracking-wider text-slate-500">
                 {equipLabel}
               </span>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-slate-300 truncate flex-1 min-w-0">{ex.name}</span>
-                {ex.rest_minutes != null && (
-                  <span className="text-xs text-slate-500 shrink-0">
-                    Rest {ex.rest_minutes} min
+              <div className="flex flex-col gap-0.5">
+                <span className="text-slate-300 break-words">{ex.name}</span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {ex.rest_minutes != null && (
+                    <span className="text-xs text-slate-500">
+                      Rest {ex.rest_minutes} min
+                    </span>
+                  )}
+                  <span className="text-xs text-slate-500">
+                    {ex.sets} sets × {ex.rep_range} reps
                   </span>
-                )}
-                <span className="text-slate-500 shrink-0">
-                  {ex.sets} sets × {ex.rep_range} reps
-                </span>
+                </div>
               </div>
               {weightHint && (
                 <span className="text-xs text-slate-500">
@@ -84,20 +86,22 @@ export default function DayCard({ day, split, exercises, createdAt, allWorkoutDa
           );
         })}
       </div>
-      <div className="mt-4 pt-4 border-t border-white/8">
-        {isFuture ? (
-          <span className="text-xs text-slate-500">
-            You can log this on {DAY_LABEL[day]} {formatShortDate(resolvedDate)}
-          </span>
-        ) : (
-          <button
-            onClick={() => navigate(`/app/track?date=${resolvedDate}`)}
-            className="text-xs text-slate-400 hover:text-white border border-white/10 hover:border-white/30 rounded-lg px-3 py-1.5 transition-all duration-200"
-          >
-            Log workout
-          </button>
-        )}
-      </div>
+      {!readOnly && (
+        <div className="mt-4 pt-4 border-t border-white/8">
+          {isFuture ? (
+            <span className="text-xs text-slate-500">
+              You can log this on {DAY_LABEL[day]} {formatShortDate(resolvedDate)}
+            </span>
+          ) : (
+            <button
+              onClick={() => navigate(`/app/track?date=${resolvedDate}`)}
+              className="text-xs text-slate-400 hover:text-white border border-white/10 hover:border-white/30 rounded-lg px-3 py-1.5 transition-all duration-200"
+            >
+              Log workout
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

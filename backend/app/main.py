@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .api.endpoints import router as api_router
 from .api.profile import router as profile_router
 from .api.plans import router as plans_router
+from .api.sharing import router as sharing_router
 from .api.tracking import router as tracking_router
 from .core.http import get_http_client
 
@@ -32,6 +33,7 @@ app.add_middleware(
 app.include_router(api_router)
 app.include_router(profile_router)
 app.include_router(plans_router)
+app.include_router(sharing_router)
 app.include_router(tracking_router)
 
 
