@@ -24,8 +24,8 @@ export default function SharePlanModal({ open, planId, onClose, onShared }) {
       setError("Username is required.");
       return;
     }
-    if (!/^[a-z0-9_]{3,20}$/.test(trimmed)) {
-      setError("Use 3-20 letters, numbers, or underscores.");
+    if (!/^[a-z0-9_]{3,20}$/.test(trimmed) || !/[0-9]/.test(trimmed)) {
+      setError("Use 3-20 letters, numbers, or underscores, and include at least one digit.");
       return;
     }
 
