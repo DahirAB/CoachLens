@@ -179,7 +179,6 @@ export default function TrackingPage() {
         username={profile?.username}
         createdAt={plan?.created_at}
         onSignOut={handleSignOut}
-        onKebabAction={() => {}}
       />
 
       <main className="max-w-5xl mx-auto px-6 pb-16">

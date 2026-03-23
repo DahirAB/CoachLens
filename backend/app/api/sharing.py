@@ -393,6 +393,63 @@ async def get_shared_plan_tracking(
     return row
 
 
+@router.get("/shares/{share_id}/tracking/all")
+async def get_shared_plan_tracking_all(
+    share_id: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    share = await _get_valid_share(share_id, user_id)
+    if not share.get("can_view_tracking", False):
+        raise HTTPException(status_code=403, detail="Tracking not permitted for this share")
 
+    client = get_http_client()
+    resp = await client.get(
+        f"{SUPABASE_URL}/rest/v1/plan_tracking_daily",
+        params={
+            "plan_id": f"eq.{share['plan_id']}",
+            "user_id": f"eq.{share['owner_id']}",
+            "select": "*",
+            "order": "logged_date.asc",
+        },
+        headers=SERVICE_HEADERS,
+    )
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail="Failed to fetch tracking")
+    rows = resp.json()
+    try:
+        for row in rows:
+            row["entries_json"] = decrypt_json_payload(
+                row.get("entries_json"),
+                aad_context=share.get("owner_id"),
+            )
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to decrypt tracking data: {e}")
+    return rows
+
+
+@router.get("/shares/{share_id}/tracking/dates")
+async def get_shared_plan_tracked_dates(
+    share_id: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    share = await _get_valid_share(share_id, user_id)
+    if not share.get("can_view_tracking", False):
+        raise HTTPException(status_code=403, detail="Tracking not permitted for this share")
+
+    client = get_http_client()
+    resp = await client.get(
+        f"{SUPABASE_URL}/rest/v1/plan_tracking_daily",
+        params={
+            "plan_id": f"eq.{share['plan_id']}",
+            "user_id": f"eq.{share['owner_id']}",
+            "select": "logged_date",
+            "order": "logged_date.asc",
+        },
+        headers=SERVICE_HEADERS,
+    )
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail="Failed to fetch tracking dates")
+    rows = resp.json()
+    return [row.get("logged_date") for row in rows if row.get("logged_date")]
 
 
