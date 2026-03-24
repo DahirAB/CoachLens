@@ -49,8 +49,8 @@ class TrainingPlanOptimiser:
         self.request = request
         self.model = cp_model.CpModel()
         self.solver = cp_model.CpSolver()
-        # deterministic solver behaviour (MVP)
-        self.solver.parameters.num_search_workers = 1
+        self.solver.parameters.num_search_workers = 4
+        self.solver.parameters.max_time_in_seconds = 10
 
         self.is_bodyweight_only = set(self.request.equipment) <= {Equipment.BODYWEIGHT}
 

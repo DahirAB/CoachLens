@@ -32,9 +32,9 @@ app.add_middleware(
 
 app.include_router(api_router)
 app.include_router(profile_router)
-app.include_router(plans_router)
 app.include_router(sharing_router)
 app.include_router(tracking_router)
+app.include_router(plans_router)
 
 
 @app.get("/")

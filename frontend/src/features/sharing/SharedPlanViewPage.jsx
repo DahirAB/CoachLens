@@ -213,7 +213,7 @@ export default function SharedPlanViewPage() {
                     )}
                   </>
                 ) : (
-                  !trackingLoading && <p className="text-xs text-slate-500">No tracking for this date.</p>
+                  !trackingLoading && <p className="text-xs text-slate-500">No logged workouts yet.</p>
                 )}
               </section>
             )}

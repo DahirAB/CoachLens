@@ -7,10 +7,8 @@ export function dateToWeekday(dateStr) {
   return WEEK[weekIdx];
 }
 
-export function weekdayLabelFromDate(dateStr) {
-  const weekday = dateToWeekday(dateStr);
-  if (!weekday) return "";
-  return weekday.charAt(0).toUpperCase() + weekday.slice(1);
+export function capitalizeWeekday(dateStr) {
+  return dateToWeekday(dateStr).charAt(0).toUpperCase() + dateToWeekday(dateStr).slice(1);
 }
 
 export function todayStr() {

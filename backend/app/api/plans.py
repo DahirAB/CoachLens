@@ -6,9 +6,17 @@ from ..core.config import SERVICE_HEADERS, SUPABASE_URL
 from ..core.crypto import decrypt_json_payload, encrypt_json_payload
 from ..core.http import get_http_client
 from ..models.schemas import GeneratePlanRequest
+from ..optimiser.data import EXERCISES
 from ..optimiser.engine import TrainingPlanOptimiser, InfeasiblePlanError
 
 router = APIRouter(prefix="/api/plans")
+
+EXERCISE_1RM_MAP = {}
+for _ex in EXERCISES:
+    if _ex.primary_1rm_link:
+        EXERCISE_1RM_MAP[_ex.name] = _ex.primary_1rm_link
+
+_1RM_KEYS = ["squat_1rm", "bench_1rm", "deadlift_1rm", "ohp_1rm"]
 
 GOAL_MAP = {
     "Hypertrophy": "hypertrophy",
@@ -18,17 +26,17 @@ GOAL_MAP = {
 }
 
 
-async def _insert_plan(user_id: str, request_json: dict) -> dict:
+async def _insert_plan(user_id: str, request_json: dict, parent_plan_id: str = None, week_number: int = 1) -> dict:
     client = get_http_client()
-    resp = await client.post(
-        f"{SUPABASE_URL}/rest/v1/plans",
-        headers=SERVICE_HEADERS,
-        json={
-            "user_id": user_id,
-            "status": "running",
-            "request_json": encrypt_json_payload(request_json, aad_context=user_id),
-        },
-    )
+    payload = {
+        "user_id": user_id,
+        "status": "running",
+        "request_json": encrypt_json_payload(request_json, aad_context=user_id),
+        "week_number": week_number
+    }
+    if parent_plan_id:
+        payload["parent_plan_id"] = parent_plan_id
+    resp = await client.post(f"{SUPABASE_URL}/rest/v1/plans", headers=SERVICE_HEADERS, json=payload)
     if resp.status_code not in (200, 201):
         raise HTTPException(status_code=502, detail=f"Failed to create plan row: {resp.text}")
     return resp.json()[0]
@@ -113,7 +121,7 @@ def _build_optimiser_input(profile: dict) -> dict:
 
 @router.get("/latest")
 async def get_latest_plan(user_id: str = Depends(get_current_user_id)):
-    select = "id,status,request_json,response_json,error_message,created_at"
+    select = "id,status,request_json,response_json,error_message,created_at,week_number,parent_plan_id"
     client = get_http_client()
     resp = await client.get(
         f"{SUPABASE_URL}/rest/v1/plans",
@@ -148,7 +156,7 @@ async def generate_plan(user_id: str = Depends(get_current_user_id)):
 
     request_snapshot = _build_optimiser_input(profile)
 
-    plan_row = await _insert_plan(user_id, request_snapshot)
+    plan_row = await _insert_plan(user_id, request_snapshot, parent_plan_id=None, week_number=1)
     plan_id = plan_row["id"]
 
     try:
@@ -177,7 +185,7 @@ async def delete_plan(
     plan_id: str,
     user_id: str = Depends(get_current_user_id),
 ):
-    # Ownership check first to avoid deleting someone else's plan.
+    # Ownership check 
     await _get_plan_for_user(plan_id, user_id)
 
     client = get_http_client()
@@ -190,3 +198,162 @@ async def delete_plan(
         raise HTTPException(status_code=502, detail=f"Failed to delete plan: {resp.text}")
 
     return {"deleted": True, "plan_id": plan_id}
+
+
+async def _get_full_plan(plan_id: str, user_id: str) -> dict:
+    client = get_http_client()
+    resp = await client.get(
+        f"{SUPABASE_URL}/rest/v1/plans",
+        params={
+            "id": f"eq.{plan_id}",
+            "user_id": f"eq.{user_id}",
+            "select": "id,user_id,status,request_json,response_json,week_number,parent_plan_id,created_at",
+            "limit": "1",
+        },
+        headers=SERVICE_HEADERS,
+    )
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"Failed to fetch plan: {resp.text}")
+    rows = resp.json()
+    if not rows:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    plan = rows[0]
+    plan["request_json"] = decrypt_json_payload(plan.get("request_json"), aad_context=user_id)
+    plan["response_json"] = decrypt_json_payload(plan.get("response_json"), aad_context=user_id)
+    return plan
+
+
+async def _get_tracking_rows(plan_id: str, user_id: str) -> list[dict]:
+    client = get_http_client()
+    resp = await client.get(
+        f"{SUPABASE_URL}/rest/v1/plan_tracking_daily",
+        params={
+            "plan_id": f"eq.{plan_id}",
+            "user_id": f"eq.{user_id}",
+            "select": "logged_date,day,entries_json",
+            "order": "logged_date.asc",
+        },
+        headers=SERVICE_HEADERS,
+    )
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"Failed to fetch tracking: {resp.text}")
+    return resp.json()
+
+
+@router.get("/{plan_id}/progress/status")
+async def get_progress_status(
+    plan_id: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    plan = await _get_full_plan(plan_id, user_id)
+    week_plan = plan["response_json"]["week_plan"]
+    days_total = len(week_plan)
+    tracking_rows = await _get_tracking_rows(plan_id, user_id)
+    days_logged = len(tracking_rows)
+
+    return {
+        "week_number": plan.get("week_number", 1),
+        "days_total": days_total,
+        "days_logged": days_logged,
+        "can_progress": days_logged >= days_total,
+    }
+
+
+def _compute_1rm_progression(week_plan: dict, tracking_rows: list[dict], user_id: str) -> dict[str, float]:
+    tracking_by_day = {}
+    for row in tracking_rows:
+        entries = decrypt_json_payload(row.get("entries_json"), aad_context=user_id)
+        tracking_by_day[row["day"]] = entries
+
+    totals: dict[str, dict] = {i: {"prescribed": 0, "done": 0} for i in _1RM_KEYS}
+
+    for day, exercises in week_plan.items():
+        day_entries = tracking_by_day[day]
+        for idx, exercise in enumerate(exercises):
+            rm_key = EXERCISE_1RM_MAP.get(exercise["name"])
+            if not rm_key:
+                continue
+            prescribed_sets = exercise["sets"]
+            entry = day_entries.get(f"{day}:{idx}", {})
+            sets_done = entry.get("sets_done", 0)
+            totals[rm_key]["prescribed"] += prescribed_sets
+            totals[rm_key]["done"] += sets_done
+
+    multipliers = {}
+    for rm_key, sets in totals.items():
+        if sets["prescribed"] == 0:
+            multipliers[rm_key] = 1.0
+            continue
+        ratio = sets["done"] / sets["prescribed"]
+        if ratio < 0.50:
+            multipliers[rm_key] = 0.90
+        elif ratio < 0.80:
+            multipliers[rm_key] = 1.0
+        elif ratio < 1.00:
+            multipliers[rm_key] = 1.0125
+        else:
+            multipliers[rm_key] = 1.05 if rm_key in ("squat_1rm", "deadlift_1rm") else 1.025
+
+    return multipliers
+
+
+@router.post("/{plan_id}/progress")
+async def progress_plan(
+    plan_id: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    plan = await _get_full_plan(plan_id, user_id)
+    week_plan = plan["response_json"]["week_plan"]
+    tracking_rows = await _get_tracking_rows(plan_id, user_id)
+
+    multipliers = _compute_1rm_progression(week_plan, tracking_rows, user_id)
+
+    profile = await get_profile(user_id)
+    updated_1rms = {}
+    for rm_key, mult in multipliers.items():
+        current = profile[rm_key]
+        updated_1rms[rm_key] = round(current * mult, 1)
+
+    client = get_http_client()
+    await client.patch(
+        f"{SUPABASE_URL}/rest/v1/profiles",
+        params={"id": f"eq.{user_id}"},
+        headers=SERVICE_HEADERS,
+        json=updated_1rms,
+    )
+
+    profile = await get_profile(user_id)
+    request_snapshot = _build_optimiser_input(profile)
+
+    old_week = plan.get("week_number", 1)
+    plan_row = await _insert_plan(
+        user_id, request_snapshot, parent_plan_id=plan_id, week_number=old_week + 1,
+    )
+    new_plan_id = plan_row["id"]
+
+    try:
+        result = TrainingPlanOptimiser(GeneratePlanRequest(**request_snapshot)).solve()
+        result_json = result.model_dump(mode="json")
+
+        await _update_plan(
+            new_plan_id,
+            {"status": "success", "response_json": result_json, "user_id": user_id},
+        )
+        return {"plan_id": new_plan_id}
+
+    except InfeasiblePlanError as e:
+        error_msg = str(e)
+        await _update_plan(new_plan_id, {"status": "error", "error_message": error_msg})
+        return {"plan_id": new_plan_id, "status": "error", "error_message": error_msg}
+
+    except Exception:
+        await _update_plan(new_plan_id, {"status": "error", "error_message": "internal error"})
+        return {"plan_id": new_plan_id, "status": "error", "error_message": "internal error"}
+
+
+@router.get("/{plan_id}")
+async def get_plan(
+    plan_id: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    return await _get_full_plan(plan_id, user_id)
