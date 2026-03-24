@@ -121,7 +121,7 @@ def _build_optimiser_input(profile: dict) -> dict:
 
 @router.get("/latest")
 async def get_latest_plan(user_id: str = Depends(get_current_user_id)):
-    select = "id,status,request_json,response_json,error_message,created_at,week_number"
+    select = "id,status,request_json,response_json,error_message,created_at,week_number,parent_plan_id"
     client = get_http_client()
     resp = await client.get(
         f"{SUPABASE_URL}/rest/v1/plans",
@@ -207,7 +207,7 @@ async def _get_full_plan(plan_id: str, user_id: str) -> dict:
         params={
             "id": f"eq.{plan_id}",
             "user_id": f"eq.{user_id}",
-            "select": "id,user_id,status,request_json,response_json,week_number,created_at",
+            "select": "id,user_id,status,request_json,response_json,week_number,parent_plan_id,created_at",
             "limit": "1",
         },
         headers=SERVICE_HEADERS,
@@ -349,3 +349,11 @@ async def progress_plan(
     except Exception:
         await _update_plan(new_plan_id, {"status": "error", "error_message": "internal error"})
         return {"plan_id": new_plan_id, "status": "error", "error_message": "internal error"}
+
+
+@router.get("/{plan_id}")
+async def get_plan(
+    plan_id: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    return await _get_full_plan(plan_id, user_id)

@@ -8,10 +8,12 @@ export function PlanProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [noPlan, setNoPlan] = useState(false);
   const [error, setError] = useState("");
+  const [viewingOldPlan, setViewingOldPlan] = useState(false);
 
   const refreshLatestPlan = useCallback(async () => {
     setLoading(true);
     setError("");
+    setViewingOldPlan(false);
     try {
       const data = await backendRequest("/api/plans/latest");
       setPlan(data);
@@ -28,12 +30,26 @@ export function PlanProvider({ children }) {
     }
   }, []);
 
+  const viewPlan = useCallback(async (planId) => {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await backendRequest(`/api/plans/${planId}`);
+      setPlan(data);
+      setViewingOldPlan(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     refreshLatestPlan();
   }, [refreshLatestPlan]);
 
   return (
-    <PlanContext.Provider value={{ plan, loading, noPlan, error, setError, refreshLatestPlan }}>
+    <PlanContext.Provider value={{ plan, loading, noPlan, error, setError, refreshLatestPlan, viewingOldPlan, viewPlan }}>
       {children}
     </PlanContext.Provider>
   );
