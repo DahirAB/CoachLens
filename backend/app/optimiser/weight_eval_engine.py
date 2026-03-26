@@ -602,6 +602,8 @@ class TrainingPlanOptimiser:
             per_muscle_cap=3
         elif self.request.training_goal != TrainingGoal.STRENGTH:
             per_muscle_cap = 2 if self.request.session_duration_minutes <= 60 else 3
+
+        if self.request.training_goal != TrainingGoal.STRENGTH:
             for day in self.days:
                 for mg in MuscleGroup:
                     if mg == CARDIO_GROUP:
