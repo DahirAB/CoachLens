@@ -598,9 +598,10 @@ class TrainingPlanOptimiser:
                 self.model.Add(squat_count + deadlift_count <= 1)
 
         
-        # per-muscle cap (non-strength = 2, strength = iso-only cap)
-        if self.request.training_goal != TrainingGoal.STRENGTH:
-            per_muscle_cap = 2
+        if self.request.training_goal == TrainingGoal.FAT_LOSS:
+            per_muscle_cap=3
+        elif self.request.training_goal != TrainingGoal.STRENGTH:
+            per_muscle_cap = 2 if self.request.session_duration_minutes <= 60 else 3
             for day in self.days:
                 for mg in MuscleGroup:
                     if mg == CARDIO_GROUP:
