@@ -29,8 +29,8 @@ EQUIPMENT_SETS = [
 
 BEST_WEIGHTS = {
     "stimulus_scale": 10,
-    "arms_bonus": 3,
-    "under_penalty": 5,
+    "arms_bonus": 10,
+    "under_penalty": 7,
     "over_penalty": 1,
     "base_repeat_penalty": 12,
     "filler_base_penalty": 10,

@@ -601,6 +601,7 @@ class TrainingPlanOptimiser:
             per_muscle_cap=3
         elif self.request.training_goal != TrainingGoal.STRENGTH:
             per_muscle_cap = 2 if self.request.session_duration_minutes <= 60 else 3
+        if self.request.training_goal != TrainingGoal.STRENGTH:
             for day in self.days:
                 for mg in MuscleGroup:
                     if mg == CARDIO_GROUP:
@@ -753,8 +754,8 @@ class TrainingPlanOptimiser:
 
        
         # weekly set penalty 
-        under_penalty = 5
-        over_penalty = 3
+        under_penalty = 7
+        over_penalty = 1
         band_penalty = (
             under_penalty * sum(weekly_under.values())
             + over_penalty * sum(weekly_over.values())
@@ -775,13 +776,13 @@ class TrainingPlanOptimiser:
             self.model.Add(rep >= 0)
         
         # favor variance ex in longer weeks
-        base_repeat_penalty = 3 if len(self.days) <= 3 else 8  
+        base_repeat_penalty = 12
         repeat_penalty_total = base_repeat_penalty * sum(
             repeat_vars[i] for i in range(len(self.available_exercises))
         )
 
         # filler base penalty
-        filler_base_penalty_k = 25
+        filler_base_penalty_k = 10
         filler_selected = sum(
             x[(day, i)]
             for day in self.days
