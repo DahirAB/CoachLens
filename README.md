@@ -1,7 +1,2 @@
 # CoachLens
-
-CoachLens is a constraint-based weekly training planner designed to generate feasible and explainable workout schedules under real-world conditions. Unlike template-driven fitness applications, CoachLens models training as an optimisation problem, accounting for limited availability, recovery requirements, equipment constraints, and user preferences.
-
-Users specify structured constraints such as available time windows, preferred muscle groups, and minimum recovery periods. These inputs are processed by a backend optimisation service, which produces a weekly plan that satisfies all hard constraints while attempting to maximise adherence to soft preferences. When constraints conflict, the system provides clear explanations for trade-offs and infeasible outcomes.
-
-The system is built with a React-based frontend for user interaction and a FastAPI backend that exposes optimisation functionality as a service. CoachLens prioritises clarity, feasibility, and transparency over feature bloat, focusing on the quality and interpretability of generated plans rather than social or commercial fitness features.
+CoachLens is a web application that generates personalised weekly resistance-training plans through a constraint-based solver built on Google OR-Tools' CP-SAT engine. Given a user's available training days, session duration, equipment, 1-rep-max values, and training goal, the solver assembles a structurally valid plan from scratch rather than filtering a fixed template library. The backend is built with FastAPI, the frontend with React, and the core optimisation logic lives in a CP-SAT model that enforces hard structural constraints alongside a weighted objective function.
